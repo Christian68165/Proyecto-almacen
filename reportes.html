@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reportes Gerenciales - SGA DISTRIBOL</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <style>
+        /* Estilos base */
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; margin: 0; padding: 0; }
+        .sidebar { height: 100%; width: 220px; position: fixed; z-index: 1; top: 0; left: 0; background-color: #2c3e50; padding-top: 20px; color: white; }
+        .sidebar a { padding: 15px 15px; text-decoration: none; font-size: 18px; color: #ecf0f1; display: block; transition: 0.3s; }
+        .sidebar a:hover { background-color: #34495e; color: #ffffff; }
+        .content { margin-left: 220px; padding: 40px; }
+        h1 { color: #2c3e50; border-bottom: 3px solid #f39c12; padding-bottom: 10px; } /* Color para reportes */
+        
+        .filter-container { max-width: 900px; margin-top: 20px; padding: 20px; background: #fff; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); display: flex; gap: 20px; align-items: flex-end; }
+        .form-group { flex: 1; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; color: #333; }
+        .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        .btn-generate { background-color: #f39c12; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        .btn-generate:hover { background-color: #e67e22; }
+
+        /* Estilos para la tabla de resultados del reporte */
+        .report-table { width: 100%; border-collapse: collapse; margin-top: 30px; background-color: white; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .report-table th, .report-table td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        .report-table th { background-color: #e67e22; color: white; }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h3 style="text-align: center; margin-bottom: 30px; color: #ecf0f1;">SGA DISTRIBOL</h3>
+    <a href="index.html">🏠 Dashboard Principal</a>
+    <a href="ingreso.html">📥 Gestión de Entradas</a>
+    <a href="salida.html">📤 Gestión de Despachos</a>
+    <a href="reportes.html">📋 Reportes Gerenciales</a>
+    <a href="usuarios.html">⚙️ Configuración (Usuarios)</a>
+</div>
+
+<div class="content">
+    <h1>📋 Reportes y Análisis de Movimientos</h1>
+    
+    <div class="filter-container">
+        <div class="form-group">
+            <label for="tipo_reporte">Tipo de Reporte:</label>
+            <select id="tipo_reporte">
+                <option value="movimientos">Histórico de Movimientos (Entrada/Salida)</option>
+                <option value="kardex">Kardex por Producto</option>
+                <option value="proveedores">Movimientos por Proveedor</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="fecha_inicio">Fecha Inicio:</label>
+            <input type="date" id="fecha_inicio">
+        </div>
+        <div class="form-group">
+            <label for="fecha_fin">Fecha Fin:</label>
+            <input type="date" id="fecha_fin">
+        </div>
+        <button type="button" class="btn-generate">🔎 Generar Reporte</button>
+    </div>
+
+    <h2>Resultado del Reporte (Últimos 7 Días)</h2>
+    
+    <table class="report-table">
+        <thead>
+            <tr>
+                <th>Fecha/Hora</th>
+                <th>Tipo</th>
+                <th>Producto (SKU y Nombre)</th>
+                <th>Cantidad</th>
+                <th>Referencia</th>
+            </tr>
+        </thead>
+        <tbody id="report-table-body">
+            <tr><td colspan="5" style="text-align: center;">Cargando reporte inicial...</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<script>
+    // -----------------------------------------------------------
+    // 1. INICIALIZACIÓN DE SUPABASE (CORREGIDA FINAL)
+    // -----------------------------------------------------------
+    // -----------------------------------------------------------
+    // 1. CONFIGURACIÓN
+    // -----------------------------------------------------------
+    const SUPABASE_URL = 'https://hbnmgnzyuvvuimunumst.supabase.co'; 
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhibm1nbnp5dXZ2dWltdW51bXN0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI1NDU3OTgsImV4cCI6MjA3ODEyMTc5OH0.mVLECbWM4-yi92K5SEL2UCK4RvFAMEqO9te_MuVAWRU';
+
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    
+    // Elementos del DOM
+    const reportTableBody = document.getElementById('report-table-body');
+    const btnGenerate = document.querySelector('.btn-generate');
+    const inputFechaInicio = document.getElementById('fecha_inicio');
+    const inputFechaFin = document.getElementById('fecha_fin');
+    
+    // Seguridad de Sesión
+    if (!localStorage.getItem('userID')) {
+        window.location.href = 'login.html';
+    }
+    
+    // -----------------------------------------------------------
+    // 2. LÓGICA DE GENERACIÓN DE REPORTE
+    // -----------------------------------------------------------
+
+    async function generateReport() {
+        reportTableBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">Cargando datos...</td></tr>';
+
+        const fechaInicio = inputFechaInicio.value;
+        // Ajustamos fecha fin para incluir todo el día seleccionado
+        const fechaFin = inputFechaFin.value; 
+        
+        let allMovements = [];
+
+        // ---------------------------------------------------------
+        // CONSULTA 1: ENTRADAS (Tabla 'Entrada')
+        // ---------------------------------------------------------
+        let queryEntrada = supabase
+            .from('Entrada') // Nombre correcto
+            .select(`
+                Fecha_entrada, 
+                Cantidad_recibida, 
+                factura_referencia,
+                Productos (Código_sku, Nombre_producto)
+            `)
+            .order('Fecha_entrada', { ascending: false });
+        
+        if (fechaInicio) queryEntrada = queryEntrada.gte('Fecha_entrada', fechaInicio);
+        if (fechaFin) {
+             const nextDay = new Date(fechaFin);
+             nextDay.setDate(nextDay.getDate() + 1);
+             queryEntrada = queryEntrada.lt('Fecha_entrada', nextDay.toISOString());
+        }
+
+        const { data: entradas, error: eError } = await queryEntrada;
+        
+        if (eError) {
+            console.error('Error Entradas:', eError);
+        } else if (entradas) {
+            entradas.forEach(mov => {
+                const prod = mov.Productos || {}; // Manejo seguro de null
+                allMovements.push({
+                    fecha: mov.Fecha_entrada, // Columna correcta
+                    tipo: 'ENTRADA',
+                    producto: `${prod.Código_sku || '?'} | ${prod.Nombre_producto || 'Desconocido'}`,
+                    cantidad: `+${mov.Cantidad_recibida}`,
+                    referencia: mov.factura_referencia || 'N/A'
+                });
+            });
+        }
+        
+        // ---------------------------------------------------------
+        // CONSULTA 2: SALIDAS (Tabla 'Salida')
+        // ---------------------------------------------------------
+        let querySalida = supabase
+            .from('Salida') // Nombre correcto
+            .select(`
+                Fecha_salida, 
+                Cantidad_despachada, 
+                Pedido_referencia,
+                Productos (Código_sku, Nombre_producto)
+            `)
+            .order('Fecha_salida', { ascending: false });
+
+        if (fechaInicio) querySalida = querySalida.gte('Fecha_salida', fechaInicio);
+        if (fechaFin) {
+             const nextDay = new Date(fechaFin);
+             nextDay.setDate(nextDay.getDate() + 1);
+             querySalida = querySalida.lt('Fecha_salida', nextDay.toISOString());
+        }
+        
+        const { data: salidas, error: sError } = await querySalida;
+
+        if (sError) {
+            console.error('Error Salidas:', sError);
+        } else if (salidas) {
+            salidas.forEach(mov => {
+                const prod = mov.Productos || {};
+                allMovements.push({
+                    fecha: mov.Fecha_salida, // Columna correcta
+                    tipo: 'SALIDA',
+                    producto: `${prod.Código_sku || '?'} | ${prod.Nombre_producto || 'Desconocido'}`,
+                    cantidad: `-${mov.Cantidad_despachada}`,
+                    referencia: mov.Pedido_referencia || 'N/A'
+                });
+            });
+        }
+
+        // ---------------------------------------------------------
+        // UNIFICAR Y MOSTRAR
+        // ---------------------------------------------------------
+        
+        // Ordenar todo mezclado por fecha (más reciente primero)
+        allMovements.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
+        renderReportTable(allMovements);
+    }
+    
+    function renderReportTable(movements) {
+        reportTableBody.innerHTML = ''; // Limpiar
+        
+        if (movements.length === 0) {
+            reportTableBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No se encontraron movimientos en este periodo.</td></tr>';
+            return;
+        }
+
+        movements.forEach(mov => {
+            const row = reportTableBody.insertRow();
+            // Estilo condicional: Verde para entradas, Rojo para salidas
+            const isEntrada = mov.tipo === 'ENTRADA';
+            const colorStyle = isEntrada ? 'color: #27ae60;' : 'color: #c0392b;';
+            const icon = isEntrada ? '📥' : '📤';
+
+            row.innerHTML = `
+                <td>${new Date(mov.fecha).toLocaleString('es-BO')}</td>
+                <td style="${colorStyle} font-weight: bold;">${icon} ${mov.tipo}</td>
+                <td>${mov.producto}</td>
+                <td style="${colorStyle} font-weight: bold;">${mov.cantidad}</td>
+                <td>${mov.referencia}</td>
+            `;
+        });
+    }
+
+    // -----------------------------------------------------------
+    // 3. INICIO AUTOMÁTICO
+    // -----------------------------------------------------------
+    document.addEventListener('DOMContentLoaded', () => {
+        // Poner fechas por defecto (Últimos 7 días)
+        const today = new Date();
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(today.getDate() - 7);
+        
+        inputFechaInicio.value = sevenDaysAgo.toISOString().split('T')[0];
+        inputFechaFin.value = today.toISOString().split('T')[0];
+        
+        btnGenerate.addEventListener('click', generateReport);
+        
+        // Cargar reporte inicial
+        generateReport();
+    });
+
+</script>
+</body>
+</html>

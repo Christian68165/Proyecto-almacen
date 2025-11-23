@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard | SGA DISTRIBOL</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        /* Estilos CSS (No cambiados) */
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; margin: 0; padding: 0; }
+        .sidebar { height: 100%; width: 220px; position: fixed; z-index: 1; top: 0; left: 0; background-color: #2c3e50; padding-top: 20px; color: white; }
+        .sidebar a { padding: 15px 15px; text-decoration: none; font-size: 18px; color: #ecf0f1; display: block; transition: 0.3s; }
+        .sidebar a:hover { background-color: #34495e; color: #ffffff; }
+        .content { margin-left: 220px; padding: 40px; }
+        h1 { color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; margin-bottom: 30px;}
+        table { width: 100%; border-collapse: collapse; margin-top: 25px; background-color: white; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background-color: #3498db; color: white; }
+        .alert-stock { background-color: #f7baba; color: #c0392b; font-weight: bold; } 
+        .cards-container { display: flex; justify-content: space-between; margin-bottom: 30px; }
+        .card { flex: 1; margin: 0 10px; padding: 20px; background-color: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
+        .card h3 { color: #3498db; margin-top: 0; }
+        .card p { font-size: 2em; font-weight: bold; margin: 5px 0 0; }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h3 style="text-align: center; margin-bottom: 30px; color: #ecf0f1;">SGA DISTRIBOL</h3>
+    <a href="index.html">🏠 Dashboard Principal</a>
+    <a href="ingreso.html">📥 Gestión de Entradas</a>
+    <a href="salida.html">📤 Gestión de Despachos</a>
+    <a href="reportes.html">📋 Reportes Gerenciales</a>
+    <a href="usuarios.html">⚙️ Configuración (Usuarios)</a>
+</div>
+
+<div class="content">
+    <h1>Dashboard de Inventario</h1>
+    
+    <div class="cards-container">
+        <div class="card" style="border-left: 5px solid #28a745;">
+            <h3>Total Productos (Líneas)</h3>
+            <p id="total-productos">Cargando...</p> 
+        </div>
+        <div class="card" style="border-left: 5px solid #ffc107;">
+            <h3>Unidades en Almacén</h3>
+            <p id="total-unidades">Cargando...</p> 
+        </div>
+        <div class="card" style="border-left: 5px solid #dc3545;">
+            <h3>🚨 Alertas de Bajo Stock</h3>
+            <p id="alertas-stock">Cargando...</p> 
+        </div>
+    </div>
+
+    <h2>📊 Stock en Tiempo Real</h2>
+    
+    <table>
+        <thead>
+            <tr>
+                <th>ID Producto</th>
+                <th>Producto (Nombre)</th>
+                <th>Ubicación</th>
+                <th>Stock Mínimo</th>
+                <th>Cantidad Actual</th>
+                <th>Estado</th>
+            </tr>
+        </thead>
+        <tbody id="stock-table-body">
+            <tr><td colspan="6">Cargando datos del inventario...</td></tr>
+        </tbody>
+    </table>
+    
+    <p style="text-align: right; margin-top: 20px;">* Los datos se actualizan automáticamente gracias a Supabase Realtime.</p>
+
+</div>
+
+<script>
+    // -----------------------------------------------------------
+    // 1. INICIALIZACIÓN DE SUPABASE (CORREGIDA)
+    // -----------------------------------------------------------
+    const SUPABASE_URL = 'https://hbnmgnzyuvvuimunumst.supabase.co'; 
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhibm1nbnp5dXZ2dWltdW51bXN0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI1NDU3OTgsImV4cCI6MjA3ODEyMTc5OH0.mVLECbWM4-yi92K5SEL2UCK4RvFAMEqO9te_MuVAWRU';
+
+    // Solución al "ReferenceError" usando window.supabase
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    
+    // -----------------------------------------------------------
+    // 2. VERIFICACIÓN DE SEGURIDAD (Si no hay sesión, redirige)
+    // -----------------------------------------------------------
+    if (!localStorage.getItem('userID')) {
+        window.location.href = 'login.html';
+        throw new Error("No hay sesión activa. Redirigiendo a login."); 
+    }
+    
+    // -----------------------------------------------------------
+    // 3. CÓDIGO FUNCIONALIDAD PRINCIPAL
+    // -----------------------------------------------------------
+
+    // Función para renderizar la tabla (Ajustada a nombres del documento)
+    function renderStockTable(data) {
+        const tbody = document.getElementById('stock-table-body');
+        tbody.innerHTML = '';
+        let totalUnidades = 0;
+        let alertasCount = 0;
+        
+        data.forEach(item => {
+            // AJUSTE: Usamos 'existencias' y 'Cantidad_real' según tu diagrama
+            const cantidad = item.Cantidad_real || 0; 
+            // Accedemos a la relación 'Productos'
+            const producto = item.Productos || {}; 
+            const nombreProd = producto.Nombre_producto || 'Desconocido';
+            const stockMin = producto.stock_minimo || 0;
+
+            totalUnidades += cantidad;
+            
+            const isLowStock = cantidad <= stockMin;
+            if (isLowStock) alertasCount++;
+
+            const row = document.createElement('tr');
+            if (isLowStock) row.classList.add('alert-stock');
+
+            row.innerHTML = `
+                <td>${item.id_producto}</td>
+                <td>${nombreProd}</td> 
+                <td>${item.ubicacion_fisica || 'General'}</td>
+                <td>${stockMin} unid</td>
+                <td>${cantidad} unid</td>
+                <td>${isLowStock ? '🚨 BAJO STOCK' : 'Óptimo'}</td>
+            `;
+            tbody.appendChild(row);
+        });
+
+        document.getElementById('total-productos').textContent = data.length;
+        document.getElementById('total-unidades').textContent = totalUnidades.toLocaleString();
+        document.getElementById('alertas-stock').textContent = alertasCount;
+    }
+
+    // Función de Carga y Realtime (Ajustada a nombres del documento)
+    async function loadRealtimeStock() {
+        const { data, error } = await supabase
+            .from('Existencias') // NOMBRE SEGÚN DOCUMENTO [cite: 150]
+            .select(`
+                id_producto,
+                Cantidad_real,
+                ubicacion_fisica,
+                Productos (
+                    Nombre_producto,
+                    stock_minimo,
+                    Código_sku
+                )
+            `);
+
+        if (error) {
+            console.error('Error cargando stock:', error);
+            // Muestra el error en la tabla para depurar fácil
+            document.getElementById('stock-table-body').innerHTML = 
+                `<tr><td colspan="6" style="color:red;">Error: ${error.message}</td></tr>`;
+            return;
+        }
+        
+        renderStockTable(data);
+
+        // Suscripción al canal 'Existencias'
+        supabase
+            .channel('cambios_stock')
+            .on('postgres_changes', 
+                { event: '*', schema: 'public', table: 'Existencias' }, 
+                payload => {
+                    console.log('Cambio detectado en Existencias:', payload);
+                    loadRealtimeStock(); 
+                }
+            )
+            .subscribe();
+    }
+
+    // Inicia la carga de datos
+    document.addEventListener('DOMContentLoaded', loadRealtimeStock);
+</script>
+</body>
+</html>

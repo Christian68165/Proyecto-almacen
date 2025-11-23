@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro de Salida - SGA DISTRIBOL</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        /* Estilos base (Mismo estilo que index.html e ingreso.html) */
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; margin: 0; padding: 0; }
+        .sidebar { height: 100%; width: 220px; position: fixed; z-index: 1; top: 0; left: 0; background-color: #2c3e50; padding-top: 20px; color: white; }
+        .sidebar a { padding: 15px 15px; text-decoration: none; font-size: 18px; color: #ecf0f1; display: block; transition: 0.3s; }
+        .sidebar a:hover { background-color: #34495e; color: #ffffff; }
+        .content { margin-left: 220px; padding: 40px; }
+        h1 { color: #2c3e50; border-bottom: 3px solid #e74c3c; padding-bottom: 10px; } /* Color rojo para destacar la salida */
+        
+        .form-container { max-width: 600px; margin-top: 20px; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; color: #333; }
+        .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        .btn-submit { background-color: #e74c3c; color: white; padding: 12px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; margin-top: 15px; }
+        .btn-submit:hover { background-color: #c0392b; }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h3 style="text-align: center; margin-bottom: 30px; color: #ecf0f1;">SGA DISTRIBOL</h3>
+    <a href="index.html">🏠 **Dashboard Principal**</a>
+    <a href="ingreso.html">📥 **Gestión de Entradas**</a>
+    <a href="salida.html">📤 **Gestión de Despachos**</a>
+    <a href="reportes.html">📋 Reportes Gerenciales</a>
+    <a href="usuarios.html">⚙️ Configuración (Usuarios)</a>
+</div>
+
+<div class="content">
+    <h1>📤 Registro de Salida / Despacho</h1>
+    
+    <div class="form-container">
+        <form id="formSalida">
+            <div class="form-group">
+                <label for="producto">Producto (ID_Producto):</label>
+                <select id="producto" name="id_producto" required>
+                    <option value="">Cargando productos...</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="cantidad">Cantidad Despachada:</label>
+                <input type="number" id="cantidad" name="cantidad_despachada" min="1" required>
+            </div>
+            <div class="form-group">
+                <label for="cliente">Cliente / Destinatario:</label>
+                <input type="text" id="cliente" name="cliente_destinatario" required>
+            </div>
+            <div class="form-group">
+                <label for="pedido">Referencia Pedido:</label>
+                <input type="text" id="pedido" name="pedido_referencia">
+            </div>
+            
+            <button type="submit" class="btn-submit">❌ Registrar Salida y Descontar Stock</button>
+            <p id="mensaje" style="margin-top: 20px;"></p>
+        </form>
+    </div>
+</div>
+
+<script>
+    // -----------------------------------------------------------
+    // 1. INICIALIZACIÓN DE SUPABASE (CORREGIDA Y CONSOLIDADA)
+    // -----------------------------------------------------------
+   // -----------------------------------------------------------
+    // CONFIGURACIÓN Y SEGURIDAD
+    // -----------------------------------------------------------
+    const SUPABASE_URL = 'https://hbnmgnzyuvvuimunumst.supabase.co'; 
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhibm1nbnp5dXZ2dWltdW51bXN0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI1NDU3OTgsImV4cCI6MjA3ODEyMTc5OH0.mVLECbWM4-yi92K5SEL2UCK4RvFAMEqO9te_MuVAWRU';
+
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    if (!localStorage.getItem('userID')) {
+        window.location.href = 'login.html';
+        throw new Error("No hay sesión activa."); 
+    }
+
+    // -----------------------------------------------------------
+    // LÓGICA PRINCIPAL
+    // -----------------------------------------------------------
+    
+    document.addEventListener('DOMContentLoaded', async () => {
+        // 1. Cargar Productos (Tabla: Productos)
+        const { data: productos, error } = await supabase
+            .from('Productos') // Nombre exacto
+            .select('id_producto, Nombre_producto, Código_sku'); // Columnas exactas
+        
+        const selectProducto = document.getElementById('producto');
+        selectProducto.innerHTML = '<option value="">Seleccione producto...</option>';
+        
+        if (error) {
+            console.error('Error:', error);
+            return;
+        }
+
+        if (productos) {
+            productos.forEach(p => {
+                const option = document.createElement('option');
+                option.value = p.id_producto;
+                option.textContent = `${p.Código_sku} | ${p.Nombre_producto}`;
+                selectProducto.appendChild(option);
+            });
+        }
+    });
+
+    // 2. Registrar Salida
+    document.getElementById('formSalida').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const mensaje = document.getElementById('mensaje');
+        const userID = localStorage.getItem('userID');
+        
+        // Datos mapeados a la tabla 'Salida'
+        const datosSalida = {
+            id_producto: document.getElementById('producto').value,
+            Cantidad_despachada: parseInt(document.getElementById('cantidad').value),
+            Cliente_destinatario: document.getElementById('cliente').value,
+            Pedido_referencia: document.getElementById('pedido').value,
+            id_usuario: userID
+        };
+
+        mensaje.style.color = 'blue';
+        mensaje.textContent = 'Verificando stock y registrando...';
+
+        // [OPCIONAL] Verificar si hay stock suficiente antes de guardar
+        const { data: stockData } = await supabase
+            .from('Existencias')
+            .select('Cantidad_real')
+            .eq('id_producto', datosSalida.id_producto)
+            .single();
+
+        const stockActual = stockData ? stockData.Cantidad_real : 0;
+
+        if (stockActual < datosSalida.Cantidad_despachada) {
+            mensaje.style.color = 'red';
+            mensaje.textContent = `⚠️ Error: Stock insuficiente. Solo quedan ${stockActual} unidades.`;
+            return; // Detener el proceso
+        }
+
+        // 3. Insertar en tabla 'Salida'
+        // Al insertar aquí, el TRIGGER 'trg_restar_stock' (que creamos en SQL)
+        // se activará automáticamente y restará la cantidad en 'Existencias'.
+        const { error } = await supabase
+            .from('Salida') 
+            .insert([datosSalida]);
+
+        if (error) {
+            mensaje.style.color = 'red';
+            mensaje.textContent = `❌ Error: ${error.message}`;
+            console.error(error);
+        } else {
+            mensaje.style.color = 'green';
+            mensaje.textContent = `✅ Salida registrada. Se descontaron ${datosSalida.Cantidad_despachada} unidades del inventario.`;
+            this.reset(); 
+        }
+    });
+</script>
+</body>
+</html>

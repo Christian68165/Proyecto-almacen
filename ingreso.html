@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro de Ingreso - SGA DISTRIBOL</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        /* [MISMO CSS ANTERIOR] */
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; margin: 0; padding: 0; }
+        .sidebar { height: 100%; width: 220px; position: fixed; z-index: 1; top: 0; left: 0; background-color: #2c3e50; padding-top: 20px; color: white; }
+        .sidebar a { padding: 15px 15px; text-decoration: none; font-size: 18px; color: #ecf0f1; display: block; transition: 0.3s; }
+        .sidebar a:hover { background-color: #34495e; color: #ffffff; }
+        .content { margin-left: 220px; padding: 40px; }
+        h1 { color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; }
+        .form-container { max-width: 600px; margin-top: 20px; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; color: #333; }
+        .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        .btn-submit { background-color: #28a745; color: white; padding: 12px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; margin-top: 15px; }
+        .btn-submit:hover { background-color: #218838; }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h3 style="text-align: center; margin-bottom: 30px; color: #ecf0f1;">SGA DISTRIBOL</h3>
+    <a href="index.html">🏠 Dashboard Principal</a>
+    <a href="ingreso.html">📥 Gestión de Entradas</a>
+    <a href="salida.html">📤 Gestión de Despachos</a>
+    <a href="reportes.html">📋 Reportes Gerenciales</a>
+    <a href="usuarios.html">⚙️ Configuración (Usuarios)</a>
+</div>
+
+<div class="content">
+    <h1>📥 Registro de Ingreso de Productos</h1>
+    
+    <div class="form-container">
+        <form id="formIngreso">
+            <div class="form-group">
+                <label for="producto">Producto (SKU | Nombre):</label>
+                <select id="producto" name="id_producto" required>
+                    <option value="">Cargando productos...</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="cantidad">Cantidad Recibida:</label>
+                <input type="number" id="cantidad" name="cantidad_recibida" min="1" required>
+            </div>
+            <div class="form-group">
+                <label for="proveedor">Proveedor:</label>
+                <input type="text" id="proveedor" name="proveedor" required>
+            </div>
+            <div class="form-group">
+                <label for="factura">Referencia Factura:</label>
+                <input type="text" id="factura" name="factura_referencia">
+            </div>
+            
+            <button type="submit" class="btn-submit">✅ Registrar Entrada y Actualizar Stock</button>
+            <p id="mensaje" style="margin-top: 20px;"></p>
+        </form>
+    </div>
+</div>
+
+<script>
+    // -----------------------------------------------------------
+    // 1. INICIALIZACIÓN DE SUPABASE (CORREGIDA)
+    // -----------------------------------------------------------
+    const SUPABASE_URL = 'https://hbnmgnzyuvvuimunumst.supabase.co'; 
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhibm1nbnp5dXZ2dWltdW51bXN0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI1NDU3OTgsImV4cCI6MjA3ODEyMTc5OH0.mVLECbWM4-yi92K5SEL2UCK4RvFAMEqO9te_MuVAWRU';
+
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // -----------------------------------------------------------
+    // 2. VERIFICACIÓN DE SEGURIDAD (Si no hay sesión, redirige)
+    // -----------------------------------------------------------
+    if (!localStorage.getItem('userID')) {
+        window.location.href = 'login.html';
+        throw new Error("No hay sesión activa. Redirigiendo a login."); 
+    }
+    
+    // ... (Inicialización Supabase y Verificación de Sesión igual que antes) ...
+    
+    // -----------------------------------------------------------
+    // 3. Lógica para cargar productos y registrar el movimiento
+    // -----------------------------------------------------------
+    
+    document.addEventListener('DOMContentLoaded', async () => {
+        // CARGAR PRODUCTOS (Tabla: Productos)
+        const { data: productos, error } = await supabase
+            .from('Productos') // Según documento
+            .select('id_producto, Nombre_producto, Código_sku'); // Según documento
+        
+        const selectProducto = document.getElementById('producto');
+        selectProducto.innerHTML = '<option value="">Seleccione producto...</option>';
+        
+        if (error) {
+            console.error('Error cargando productos:', error);
+            return;
+        }
+
+        if (productos) {
+            productos.forEach(p => {
+                const option = document.createElement('option');
+                // Ajuste de nombres de columna
+                option.value = p.id_producto;
+                option.textContent = `${p.Código_sku} | ${p.Nombre_producto}`;
+                selectProducto.appendChild(option);
+            });
+        }
+    });
+
+    // 4. Manejar el envío del formulario
+    document.getElementById('formIngreso').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const mensaje = document.getElementById('mensaje');
+        const userID = localStorage.getItem('userID'); 
+
+        // Preparamos los datos según la tabla 'Entrada' del diagrama
+        const datosIngreso = {
+            id_producto: document.getElementById('producto').value,
+            Cantidad_recibida: parseInt(document.getElementById('cantidad').value),
+            Proveedor: document.getElementById('proveedor').value,
+            factura_referencia: document.getElementById('factura').value,
+            id_usuario: userID,
+            Fecha_entrada: new Date().toISOString() // Agregamos la fecha automática
+        };
+
+        mensaje.style.color = 'blue';
+        mensaje.textContent = 'Procesando ingreso...';
+
+        // PASO A: Insertar en la tabla Histórica 'Entrada'
+        const { error: errorInsert } = await supabase
+            .from('Entrada') // Tabla según documento
+            .insert([datosIngreso]);
+
+        if (errorInsert) {
+            mensaje.style.color = 'red';
+            mensaje.textContent = `❌ Error: ${errorInsert.message}`;
+            return;
+        }
+
+        // PASO B: Actualizar la tabla 'Existencias' (Suma al stock)
+        // Nota: Hacemos esto manualmente aquí por si no tienes configurado el Trigger SQL
+        const { error: errorUpdate } = await supabase.rpc('sumar_stock', { 
+            p_id_producto: datosIngreso.id_producto, 
+            p_cantidad: datosIngreso.Cantidad_recibida 
+        });
+
+        // Si no tienes la función RPC, usa este método alternativo de JS (menos seguro pero funcional):
+        /*
+        const { data: stockActual } = await supabase.from('Existencias').select('Cantidad_real').eq('id_producto', datosIngreso.id_producto).single();
+        const nuevaCantidad = (stockActual ? stockActual.Cantidad_real : 0) + datosIngreso.Cantidad_recibida;
+        const { error: errorUpdate } = await supabase.from('Existencias').upsert({ id_producto: datosIngreso.id_producto, Cantidad_real: nuevaCantidad });
+        */
+
+        if (errorUpdate) {
+            console.error(errorUpdate);
+            mensaje.style.color = 'orange';
+            mensaje.textContent = '⚠️ Entrada registrada, pero hubo error actualizando el stock.';
+        } else {
+            mensaje.style.color = 'green';
+            mensaje.textContent = `✅ Éxito: Se ingresaron ${datosIngreso.Cantidad_recibida} unidades. Stock actualizado.`;
+            this.reset(); 
+        }
+    });
+</script>
+</body>
+</html>

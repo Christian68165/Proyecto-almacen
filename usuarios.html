@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuración de Usuarios - SGA DISTRIBOL</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        /* Estilos base */
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; margin: 0; padding: 0; }
+        .sidebar { height: 100%; width: 220px; position: fixed; z-index: 1; top: 0; left: 0; background-color: #2c3e50; padding-top: 20px; color: white; }
+        .sidebar a { padding: 15px 15px; text-decoration: none; font-size: 18px; color: #ecf0f1; display: block; transition: 0.3s; }
+        .sidebar a:hover { background-color: #34495e; color: #ffffff; }
+        .content { margin-left: 220px; padding: 40px; }
+        h1 { color: #2c3e50; border-bottom: 3px solid #7f8c8d; padding-bottom: 10px; } /* Color para configuración */
+        
+        .user-table { width: 100%; border-collapse: collapse; margin-top: 25px; background-color: white; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .user-table th, .user-table td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        .user-table th { background-color: #7f8c8d; color: white; }
+        
+        .btn-add { background-color: #3498db; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; margin-bottom: 20px; }
+        .btn-edit, .btn-delete { padding: 5px 10px; margin-right: 5px; border: none; border-radius: 3px; cursor: pointer; }
+        .btn-edit { background-color: #2ecc71; color: white; }
+        .btn-delete { background-color: #e74c3c; color: white; }
+        #message { margin-top: 15px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h3 style="text-align: center; margin-bottom: 30px; color: #ecf0f1;">SGA DISTRIBOL</h3>
+    <a href="index.html">🏠 Dashboard Principal</a>
+    <a href="ingreso.html">📥 Gestión de Entradas</a>
+    <a href="salida.html">📤 Gestión de Despachos</a>
+    <a href="reportes.html">📋 Reportes Gerenciales</a>
+    <a href="usuarios.html">⚙️ Configuración (Usuarios)</a>
+</div>
+
+<div class="content">
+    <h1>⚙️ Gestión de Usuarios y Permisos</h1>
+    
+    <button type="button" class="btn-add">➕ Crear Nuevo Usuario</button>
+    <p id="message"></p>
+    
+    <table class="user-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nombre Completo</th>
+                <th>Email</th>
+                <th>Rol</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody id="user-list">
+            </tbody>
+    </table>
+</div>
+
+<script>
+    // -----------------------------------------------------------
+// 1. INICIALIZACIÓN DE SUPABASE
+// -----------------------------------------------------------
+const SUPABASE_URL = 'https://hbnmgnzyuvvuimunumst.supabase.co'; 
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhibm1nbnp5dXZ2dWltdW51bXN0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI1NDU3OTgsImV4cCI6MjA3ODEyMTc5OH0.mVLECbWM4-yi92K5SEL2UCK4RvFAMEqO9te_MuVAWRU';
+
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const userListBody = document.getElementById('user-list');
+const messageElement = document.getElementById('message');
+const btnAddUser = document.querySelector('.btn-add');
+// -----------------------------------------------------------
+
+// -----------------------------------------------------------
+// 2. VERIFICACIÓN DE SEGURIDAD (Redirección por sesión y rol)
+// -----------------------------------------------------------
+const userRole = localStorage.getItem('userRole');
+
+if (!localStorage.getItem('userID')) {
+    window.location.href = 'login.html';
+    throw new Error("No hay sesión activa. Redirigiendo a login."); 
+}
+
+// **VERIFICACIÓN DE ROL:** Solo los Administradores acceden.
+if (userRole !== 'Administrador') {
+    alert('Acceso Denegado: Solo los Administradores pueden acceder a esta configuración.');
+    window.location.href = 'index.html';
+    throw new Error("Acceso denegado por rol.");
+}
+// -----------------------------------------------------------
+
+// -----------------------------------------------------------
+// 3. FUNCIÓN PARA CARGAR Y MOSTRAR USUARIOS
+// -----------------------------------------------------------
+async function loadUsers() {
+    messageElement.textContent = 'Cargando lista de usuarios...';
+    messageElement.style.color = '#3498db';
+    
+    // Consulta a la tabla 'Usuarios' (nombres exactos de columnas)
+    const { data: users, error } = await supabase
+        .from('Usuarios')
+        .select('id_usuario, Nombre, Apellido, correo_electronico, rol')
+        .order('id_usuario', { ascending: true });
+
+    if (error) {
+        messageElement.textContent = `❌ Error al cargar usuarios: ${error.message}`;
+        messageElement.style.color = 'red';
+        console.error('Error loading users:', error);
+        return;
+    }
+
+    messageElement.textContent = ''; 
+    userListBody.innerHTML = ''; 
+
+    if (users.length === 0) {
+        userListBody.innerHTML = '<tr><td colspan="5">No hay usuarios registrados.</td></tr>';
+        return;
+    }
+
+    users.forEach(user => {
+        const row = userListBody.insertRow();
+        const fullName = `${user.Nombre} ${user.Apellido || ''}`.trim();
+
+        row.insertCell().textContent = user.id_usuario;
+        row.insertCell().textContent = fullName;
+        row.insertCell().textContent = user.correo_electronico;
+        row.insertCell().textContent = user.rol;
+        
+        const actionCell = row.insertCell();
+        actionCell.innerHTML = `
+            <button class="btn-delete" data-id="${user.id_usuario}">Eliminar</button>
+        `;
+        // Nota: Se omitió el botón Editar por complejidad en el prototipo, enfocándose en Crear/Eliminar.
+    });
+}
+
+// -----------------------------------------------------------
+// 4. FUNCIÓN PARA CREAR NUEVO USUARIO
+// -----------------------------------------------------------
+async function createUser() {
+    // Uso de prompt para una interfaz de creación rápida (prototipo)
+    const newName = prompt("1/4 - Ingrese el Nombre del nuevo usuario:");
+    if (!newName) return;
+    const newApellido = prompt("2/4 - Ingrese el Apellido del nuevo usuario (opcional):") || '';
+    const newEmail = prompt("3/4 - Ingrese el Correo Electrónico:");
+    if (!newEmail || !newEmail.includes('@')) {
+        alert("Email inválido. Abortando.");
+        return;
+    }
+    const newPassword = prompt("4/4 - Ingrese la Contraseña (guardada en t_hash):");
+    if (!newPassword) return;
+
+    let newRole = prompt("Rol del usuario ('Administrador' o 'Operario'):");
+    newRole = newRole ? newRole.trim() : '';
+    if (newRole !== 'Administrador' && newRole !== 'Operario') {
+        alert("Rol inválido. Debe ser 'Administrador' u 'Operario'. Abortando.");
+        return;
+    }
+
+    messageElement.textContent = 'Creando usuario...';
+    messageElement.style.color = 'blue';
+
+    const userData = {
+        "Nombre": newName,
+        "Apellido": newApellido,
+        "correo_electronico": newEmail,
+        "rol": newRole,
+        "t_hash": newPassword // Columna de contraseña en la BD
+    };
+
+    const { error } = await supabase
+        .from('Usuarios')
+        .insert([userData]);
+
+    if (error) {
+        messageElement.textContent = `❌ Error al crear usuario: ${error.message}`;
+        messageElement.style.color = 'red';
+        console.error(error);
+    } else {
+        messageElement.textContent = `✅ Usuario ${newName} creado con éxito.`;
+        messageElement.style.color = 'green';
+        loadUsers(); // Recargar la lista
+    }
+}
+
+// -----------------------------------------------------------
+// 5. FUNCIÓN PARA ELIMINAR USUARIO
+// -----------------------------------------------------------
+async function deleteUser(id) {
+    // Evitar que el administrador se elimine a sí mismo
+    if (id == localStorage.getItem('userID')) {
+        alert("No puedes eliminar tu propia cuenta mientras estás logueado.");
+        return;
+    }
+
+    if (!confirm(`⚠️ ¿Está seguro de eliminar el usuario con ID ${id}? Esta acción es irreversible.`)) {
+        return;
+    }
+
+    messageElement.textContent = `Eliminando usuario ${id}...`;
+    messageElement.style.color = 'orange';
+
+    const { error } = await supabase
+        .from('Usuarios')
+        .delete()
+        .eq('id_usuario', id);
+
+    if (error) {
+        messageElement.textContent = `❌ Error al eliminar usuario: ${error.message}`;
+        messageElement.style.color = 'red';
+        console.error(error);
+    } else {
+        messageElement.textContent = `✅ Usuario ID ${id} eliminado con éxito.`;
+        messageElement.style.color = 'green';
+        loadUsers(); // Recargar la lista
+    }
+}
+
+// -----------------------------------------------------------
+// 6. EVENT LISTENERS
+// -----------------------------------------------------------
+document.addEventListener('DOMContentLoaded', () => {
+    loadUsers();
+
+    // Evento para el botón "Crear Nuevo Usuario"
+    btnAddUser.addEventListener('click', createUser);
+
+    // Evento para los botones de la tabla (delegación de eventos)
+    userListBody.addEventListener('click', (e) => {
+        if (e.target.classList.contains('btn-delete')) {
+            const userId = e.target.dataset.id;
+            deleteUser(userId);
+        }
+    });
+});
+</script>
+</body>
+</html>

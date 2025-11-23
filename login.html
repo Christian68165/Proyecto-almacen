@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SGA DISTRIBOL - Inicio de Sesión</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <style>
+        /* [MISMO CSS ANTERIOR] */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #2c3e50; /* Color oscuro del sidebar */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .login-container {
+            background: #fff;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+            width: 350px;
+            text-align: center;
+        }
+        h2 {
+            color: #2c3e50;
+            margin-bottom: 25px;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #555;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+        .btn-login {
+            width: 100%;
+            background-color: #3498db;
+            color: white;
+            padding: 15px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 18px;
+            transition: background-color 0.3s;
+        }
+        .btn-login:hover {
+            background-color: #2980b9;
+        }
+        #mensaje-error {
+            color: #e74c3c;
+            margin-top: 15px;
+            font-weight: bold;
+        }
+        .logo {
+            margin-bottom: 20px;
+            color: #3498db;
+            font-size: 2em;
+        }
+    </style>
+</head>
+<body>
+
+<div class="login-container">
+    <div class="logo">📦 SGA DISTRIBOL</div>
+    <h2>Acceso al Sistema</h2>
+    
+    <form id="formLogin">
+        <div class="form-group">
+            <label for="email">Correo Electrónico:</label>
+            <input type="email" id="email" name="email" required placeholder="ej: j.vargas@distribol.com">
+        </div>
+        <div class="form-group">
+            <label for="password">Contraseña:</label>
+            <input type="password" id="password" name="password" required>
+        </div>
+        
+        <button type="submit" class="btn-login">🔑 Iniciar Sesión</button>
+        <p id="mensaje-error"></p>
+    </form>
+</div>
+
+<script>
+    // -----------------------------------------------------------------
+    // 1. INICIALIZACIÓN DE SUPABASE (CORREGIDA Y CONSOLIDADA)
+    // -----------------------------------------------------------------
+    // -----------------------------------------------------------------
+    // 1. CONFIGURACIÓN
+    // -----------------------------------------------------------------
+    const SUPABASE_URL = 'https://hbnmgnzyuvvuimunumst.supabase.co'; 
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhibm1nbnp5dXZ2dWltdW51bXN0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI1NDU3OTgsImV4cCI6MjA3ODEyMTc5OH0.mVLECbWM4-yi92K5SEL2UCK4RvFAMEqO9te_MuVAWRU';
+
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // -----------------------------------------------------------------
+    // 2. LÓGICA DE INICIO DE SESIÓN (Método Tabla Personalizada)
+    // -----------------------------------------------------------------
+    document.getElementById('formLogin').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value; 
+        const mensaje = document.getElementById('mensaje-error');
+
+        mensaje.textContent = 'Verificando credenciales...';
+        mensaje.style.color = '#3498db';
+
+        try {
+            // CONSULTA DIRECTA A LA TABLA "Usuarios" (Según tu Tesis)
+            // Buscamos si existe alguien con ese correo Y esa contraseña
+            const { data, error } = await supabase
+                .from('Usuarios') // Nombre exacto de la tabla
+                .select('*')      // Traemos todos los datos (id, nombre, rol)
+                .eq('correo_electronico', email) // Columna exacta
+                .eq('t_hash', password)          // Comparamos contraseña (texto plano para prototipo)
+                .single(); // Esperamos un solo resultado
+
+            // Si hay error o no hay datos (data es null)
+            if (error || !data) {
+                throw new Error("Credenciales incorrectas");
+            }
+
+            // SI EL LOGIN ES EXITOSO:
+            mensaje.style.color = '#2ecc71';
+            mensaje.textContent = `✅ ¡Bienvenido ${data.Nombre}! Entrando...`;
+
+            // Guardamos los datos críticos para que las otras páginas funcionen
+            localStorage.setItem('userID', data.id_usuario); 
+            localStorage.setItem('userRole', data.rol);
+            localStorage.setItem('userName', data.Nombre);
+
+            // Redirección
+            setTimeout(() => {
+                window.location.href = 'index.html'; 
+            }, 1500);
+
+        } catch (err) {
+            mensaje.style.color = '#e74c3c';
+            mensaje.textContent = '❌ Error: Correo o contraseña incorrectos.';
+            console.error(err);
+        }
+    });
+</script>
+</body>
+</html>
